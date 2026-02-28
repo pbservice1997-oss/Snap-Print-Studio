@@ -1,4 +1,4 @@
-const CACHE_NAME = 'snap-studio-v2';
+const CACHE_NAME = 'snap-studio-v-3';
 const ASSETS = [
   '/',
   '/index.html',
@@ -21,3 +21,4 @@ self.addEventListener('fetch', (e) => {
   );
 
 });
+
