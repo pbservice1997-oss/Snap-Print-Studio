@@ -62,11 +62,10 @@
     <header class="fixed top-0 left-0 w-full h-16 bg-white/95 backdrop-blur-md border-b border-gray-200 z-50 shadow-sm flex items-center">
         <div class="w-full max-w-3xl mx-auto px-4 md:px-12 flex justify-between items-center">
             <div class="flex items-center">
-                <h1 class="text-xl font-bold text-blue-600 tracking-tight flex items-center">
-                    <svg class="w-6 h-6 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                    Snap&Print
+                <h1 class="text-xl font-bold text-blue-600 tracking-tight flex items-baseline">
+                    <svg class="w-6 h-6 mr-1.5 self-center" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    Snap&Print <span class="text-[11px] text-gray-400 font-normal ml-2 tracking-normal">V.4</span>
                 </h1>
-                <!-- ป้ายสถานะออนไลน์/ออฟไลน์ -->
                 <span id="networkStatus" class="ml-3 px-2 py-0.5 text-[10px] font-bold rounded-full bg-green-100 text-green-700 border border-green-200 shadow-sm">
                     🟢 ออนไลน์
                 </span>
@@ -94,7 +93,6 @@
         </div>
     </div>
 
-    <!-- ส่วนที่ 1: อัพโหลด & ลบพื้นหลัง -->
     <div id="step1-section" class="glass-panel p-5 mb-6">
         <div class="mb-4" id="uploadArea">
             <label class="block mb-2 font-medium text-lg text-gray-700">1. เลือกลูกค้า (อัปโหลดรูป)</label>
@@ -154,7 +152,6 @@
         </div>
     </div>
 
-    <!-- ส่วนที่ 2: ครอปรูป -->
     <div id="step2-section" class="glass-panel p-5 mb-6 hidden">
         <div class="sticky top-16 z-40 bg-white/95 backdrop-blur-md -mx-5 px-5 py-4 mb-5 border-b border-gray-200 shadow-sm flex gap-3 sticky-action-bar">
             <button id="backToStep1Btn" class="w-1/3 bg-gray-100 active:bg-gray-200 text-gray-700 font-bold p-3 rounded-xl text-sm border border-gray-200">กลับ</button>
@@ -230,7 +227,6 @@
         </div>
     </div>
 
-    <!-- ส่วนที่ 3: พรีวิวและส่งออก -->
     <div id="preview-section" class="glass-panel p-5 hidden">
         <div class="sticky top-16 z-40 bg-white/95 backdrop-blur-md -mx-5 px-5 py-4 mb-5 border-b border-gray-200 shadow-sm sticky-action-bar">
             
@@ -275,9 +271,17 @@
         </button>
     </div>
 
-    <!-- Script ควบคุม -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     <script>
+        // 1. ตั้งค่าการเชื่อมต่อ GAS API (เอาไว้บนสุดเลย)
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbxTm1rBQFW7cgovS1uzgDLmIDEvqLgG6bdVV8vFMkNT4www9tglzjDihgbTNqv5KiqP/exec";
+
+        // 2. ลงทะเบียน Service Worker ให้แอปโหลดออฟไลน์ได้
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js');
+        }
+
+        // 3. ตัวแปรของระบบ Canvas
         let cropper; let selectedBgColor = '#FFFFFF';
         let finalMaxQualityCanvases = []; let finalPrintQualityCanvases = []; 
         let singleVisaCanvasForExport = null; 
@@ -285,27 +289,84 @@
         let currentOrderId = "รอรหัส..."; 
         let isOrderIdGenerated = false; 
         
-        // --- OFFLINE SYNC SYSTEM ---
+        // --- 4. ระบบ OFFLINE SYNC SYSTEM ---
         let offlineQueue = JSON.parse(localStorage.getItem('snapStudioQueue') || '[]');
         let localOrderCount = parseInt(localStorage.getItem('snapStudioOrderCount') || '0');
         let localLastDate = localStorage.getItem('snapStudioLastDate') || '';
+        let isSyncing = false; // ตัวแปรล็อกประตู กันส่งข้อมูลซ้อนกัน
 
+        // 4.1 ฟังก์ชันกลางสำหรับเรียก API
+        async function callGAS(methodName, extraData = {}) {
+            const response = await fetch(GAS_URL, {
+                redirect: 'follow', // ป้องกันบั๊กเวลา Google ส่ง Redirect
+                method: 'POST',
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify({ method: methodName, ...extraData })
+            });
+            const result = await response.json();
+            if (result.status === 'success') {
+                if (result.data && result.data.success === false) {
+                    throw new Error(result.data.error);
+                }
+                return result.data;
+            }
+            throw new Error(result.message);
+        }
+
+        // 4.2 ระบบดันข้อมูลออฟไลน์
+        async function syncOfflineQueue() {
+            if (isSyncing || offlineQueue.length === 0 || !navigator.onLine) return;
+            
+            isSyncing = true; // ล็อกประตู
+            const statusBadge = document.getElementById('networkStatus');
+            
+            try {
+                while (offlineQueue.length > 0 && navigator.onLine) {
+                    statusBadge.innerHTML = `🟢 กำลังซิงค์... (เหลือ ${offlineQueue.length})`;
+                    statusBadge.className = 'ml-3 px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-100 text-blue-700 border border-blue-200 shadow-sm';
+                    
+                    const dataToSync = offlineQueue[0];
+                    await callGAS("processAction", { payload: dataToSync });
+                    
+                    offlineQueue.shift(); 
+                    localStorage.setItem('snapStudioQueue', JSON.stringify(offlineQueue));
+                }
+            } catch(err) {
+                console.error('การซิงค์ขัดข้อง จะลองใหม่ภายหลัง:', err);
+            } finally {
+                isSyncing = false; // ปลดล็อกประตู
+                updateNetworkStatus(); // รีเซ็ตหน้าจอเป็นปกติ
+            }
+        }
+
+        // 4.3 ระบบเช็คเน็ตและอัปเดตหน้าจอ
         function updateNetworkStatus() {
             const statusBadge = document.getElementById('networkStatus');
             if (navigator.onLine) {
-                statusBadge.innerHTML = '🟢 ออนไลน์';
-                statusBadge.className = 'ml-3 px-2 py-0.5 text-[10px] font-bold rounded-full bg-green-100 text-green-700 border border-green-200 shadow-sm';
+                if (!isSyncing && offlineQueue.length === 0) {
+                    statusBadge.innerHTML = '🟢 ออนไลน์';
+                    statusBadge.className = 'ml-3 px-2 py-0.5 text-[10px] font-bold rounded-full bg-green-100 text-green-700 border border-green-200 shadow-sm';
+                }
                 if (offlineQueue.length > 0) syncOfflineQueue();
             } else {
                 statusBadge.innerHTML = `🔴 ออฟไลน์ (ค้าง ${offlineQueue.length})`;
                 statusBadge.className = 'ml-3 px-2 py-0.5 text-[10px] font-bold rounded-full bg-red-100 text-red-700 border border-red-200 shadow-sm';
             }
         }
+
+        // 4.4 ฟังก์ชันบันทึกข้อมูลลงเครื่องตอนออฟไลน์
+        function pushToOfflineQueue(payload) {
+            offlineQueue.push(payload);
+            localStorage.setItem('snapStudioQueue', JSON.stringify(offlineQueue));
+            updateNetworkStatus();
+        }
+
         window.addEventListener('online', updateNetworkStatus);
         window.addEventListener('offline', updateNetworkStatus);
         updateNetworkStatus(); // Run once on load
         // ---------------------------
 
+        // 5. ระบบตกแต่งรูป (Canvas, Cropper, UI)
         const container = document.getElementById('eraser-container'); const canvas = document.getElementById('eraser-canvas'); const ctx = canvas.getContext('2d', { willReadFrequently: true });
         let isEraserActive = false; let isDrawing = false; let eraserHistory = []; let redoHistory = []; 
         let transform = { x: 0, y: 0, scale: 1 }; let isDragging = false; let dragStart = { x: 0, y: 0 };
@@ -323,38 +384,39 @@
         }
 
         document.getElementById('viewSummaryBtn').addEventListener('click', async () => {
-    document.getElementById('summaryModal').classList.remove('hidden');
-    document.getElementById('summaryContent').innerHTML = '<p class="text-center text-gray-500 my-4 text-sm">กำลังดึงข้อมูลจาก Server...</p>';
-    
-    if (!navigator.onLine) {
-         document.getElementById('summaryContent').innerHTML = `<p class="text-center text-orange-500 my-4 font-bold">⚠️ ออฟไลน์อยู่ ไม่สามารถดูยอดเรียลไทม์ได้<br><span class="text-sm font-normal text-gray-500">มีออเดอร์รอซิงค์ในเครื่อง ${offlineQueue.length} รายการ</span></p>`;
-         return;
-    }
+            document.getElementById('summaryModal').classList.remove('hidden');
+            document.getElementById('summaryContent').innerHTML = '<p class="text-center text-gray-500 my-4 text-sm">กำลังดึงข้อมูลจาก Server...</p>';
+            
+            if (!navigator.onLine) {
+                 document.getElementById('summaryContent').innerHTML = `<p class="text-center text-orange-500 my-4 font-bold">⚠️ ออฟไลน์อยู่ ไม่สามารถดูยอดเรียลไทม์ได้<br><span class="text-sm font-normal text-gray-500">มีออเดอร์รอซิงค์ในเครื่อง ${offlineQueue.length} รายการ</span></p>`;
+                 return;
+            }
 
-    try {
-        const summary = await callGAS("getTodaySummary");
-        let html = `
-            <div class="grid grid-cols-2 gap-3 mb-2">
-                <div class="bg-blue-50 p-3 rounded-lg text-center border border-blue-100">
-                    <span class="block text-xs text-blue-500 font-bold mb-1">ทำรายการทั้งหมด</span>
-                    <span class="text-2xl font-black text-blue-700">${summary.totalTransactions} <span class="text-sm font-normal text-blue-500">ครั้ง</span></span>
-                </div>
-                <div class="bg-green-50 p-3 rounded-lg text-center border border-green-100">
-                    <span class="block text-xs text-green-500 font-bold mb-1">ใช้กระดาษไปแล้ว</span>
-                    <span class="text-2xl font-black text-green-700">${summary.totalPaper} <span class="text-sm font-normal text-green-500">แผ่น</span></span>
-                </div>
-            </div>
-            <ul class="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-200 divide-y divide-gray-200">
-                <li class="py-2 flex justify-between"><span>📲 แชร์/เซฟ แผ่นรวม</span> <b>${summary.sheetSave} ออเดอร์</b></li>
-                <li class="py-2 flex justify-between"><span>👤 บันทึกรูปเดี่ยว</span> <b>${summary.singleSave} ออเดอร์</b></li>
-                <li class="py-2 flex justify-between"><span>📦 โหลดไฟล์ ZIP</span> <b>${summary.zip} ออเดอร์</b></li>
-            </ul>
-        `;
-        document.getElementById('summaryContent').innerHTML = html;
-    } catch(err) {
-        document.getElementById('summaryContent').innerHTML = '<p class="text-center text-red-500 my-4">ดึงข้อมูลไม่สำเร็จ</p>';
-    }
-});
+            try {
+                const summary = await callGAS("getTodaySummary");
+                let html = `
+                    <div class="grid grid-cols-2 gap-3 mb-2">
+                        <div class="bg-blue-50 p-3 rounded-lg text-center border border-blue-100">
+                            <span class="block text-xs text-blue-500 font-bold mb-1">ทำรายการทั้งหมด</span>
+                            <span class="text-2xl font-black text-blue-700">${summary.totalTransactions} <span class="text-sm font-normal text-blue-500">ครั้ง</span></span>
+                        </div>
+                        <div class="bg-green-50 p-3 rounded-lg text-center border border-green-100">
+                            <span class="block text-xs text-green-500 font-bold mb-1">ใช้กระดาษไปแล้ว</span>
+                            <span class="text-2xl font-black text-green-700">${summary.totalPaper} <span class="text-sm font-normal text-green-500">แผ่น</span></span>
+                        </div>
+                    </div>
+                    <ul class="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-200 divide-y divide-gray-200">
+                        <li class="py-2 flex justify-between"><span>📲 แชร์/เซฟ แผ่นรวม</span> <b>${summary.sheetSave} ออเดอร์</b></li>
+                        <li class="py-2 flex justify-between"><span>👤 บันทึกรูปเดี่ยว</span> <b>${summary.singleSave} ออเดอร์</b></li>
+                        <li class="py-2 flex justify-between"><span>📦 โหลดไฟล์ ZIP</span> <b>${summary.zip} ออเดอร์</b></li>
+                    </ul>
+                `;
+                document.getElementById('summaryContent').innerHTML = html;
+            } catch(err) {
+                document.getElementById('summaryContent').innerHTML = '<p class="text-center text-red-500 my-4">ดึงข้อมูลไม่สำเร็จ</p>';
+            }
+        });
+
         document.getElementById('closeSummaryBtn').addEventListener('click', () => { document.getElementById('summaryModal').classList.add('hidden'); });
 
         document.getElementById('globalRestartBtn').addEventListener('click', function() {
@@ -511,10 +573,10 @@
             const copies = parseInt(document.getElementById('copies').value) || 1; const border = parseInt(document.getElementById('borderStyle').value); 
 
             finalPrintQualityCanvases = buildSheets(visaImageCanvas, pW, pH, vW, vH, copies, 300, border, tempOrderId);
-            // ป้องกันเบราว์เซอร์ค้าง/ภาพหาย จากการสร้าง Canvas ที่ใหญ่เกินขีดจำกัด
+            
             let maxSafeDPI = Math.max(300, visaImageCanvas.width / vW);
-            if (pOpt.value === 'A4') maxSafeDPI = 300; // แผ่น A4 ใหญ่มาก ล็อคไว้ที่ 300 DPI ก็ชัดกริบแล้ว
-            else if (maxSafeDPI > 600) maxSafeDPI = 600; // แผ่น 4x6 ล็อคสูงสุดที่ 600 DPI
+            if (pOpt.value === 'A4') maxSafeDPI = 300; 
+            else if (maxSafeDPI > 600) maxSafeDPI = 600; 
             
             finalMaxQualityCanvases = buildSheets(visaImageCanvas, pW, pH, vW, vH, copies, maxSafeDPI, border, tempOrderId);
 
@@ -559,37 +621,36 @@
             return sheets;
         }
 
-        // --- ระบบบันทึก (มีออฟไลน์ในตัว) ---
-       async function executeActionWithOrder(actionName, callback) {
-    if (isOrderIdGenerated) { logFinalAction(actionName); callback(); return; }
-    showLoader("กำลังสร้าง Order ID และจัดเตรียมข้อมูล...");
+        async function executeActionWithOrder(actionName, callback) {
+            if (isOrderIdGenerated) { logFinalAction(actionName); callback(); return; }
+            showLoader("กำลังสร้าง Order ID และจัดเตรียมข้อมูล...");
 
-    if(navigator.onLine) {
-        try {
-            const orderId = await callGAS("generateOrderId", { clientCount: localOrderCount });
-            const parts = orderId.split('-');
-            if (parts.length >= 4) {
-                const dateStr = parts.slice(0, 3).join('-');
-                const numPart = parseInt(parts[3], 10);
-                if (!isNaN(numPart)) {
-                    localStorage.setItem('snapStudioOrderCount', numPart);
-                    localStorage.setItem('snapStudioLastDate', dateStr);
-                    localOrderCount = numPart;
-                    localLastDate = dateStr;
+            if(navigator.onLine) {
+                try {
+                    const orderId = await callGAS("generateOrderId", { clientCount: localOrderCount });
+                    const parts = orderId.split('-');
+                    if (parts.length >= 4) {
+                        const dateStr = parts.slice(0, 3).join('-');
+                        const numPart = parseInt(parts[3], 10);
+                        if (!isNaN(numPart)) {
+                            localStorage.setItem('snapStudioOrderCount', numPart);
+                            localStorage.setItem('snapStudioLastDate', dateStr);
+                            localOrderCount = numPart;
+                            localLastDate = dateStr;
+                        }
+                    }
+                    currentOrderId = orderId; isOrderIdGenerated = true;
+                    document.getElementById('displayOrderId').innerText = orderId; 
+                    generateLayouts(singleVisaCanvasForExport, orderId);
+                    logFinalAction(actionName);
+                    hideLoader(); callback(); 
+                } catch(err) {
+                    fallbackLocalOrder(actionName, callback);
                 }
+            } else {
+                fallbackLocalOrder(actionName, callback);
             }
-            currentOrderId = orderId; isOrderIdGenerated = true;
-            document.getElementById('displayOrderId').innerText = orderId; 
-            generateLayouts(singleVisaCanvasForExport, orderId);
-            logFinalAction(actionName);
-            hideLoader(); callback(); 
-        } catch(err) {
-            fallbackLocalOrder(actionName, callback);
         }
-    } else {
-        fallbackLocalOrder(actionName, callback);
-    }
-}
 
         function fallbackLocalOrder(actionName, callback) {
             const d = new Date();
@@ -598,7 +659,6 @@
             const day = ("0" + d.getDate()).slice(-2);
             const todayStr = `${year}-${month}-${day}`;
 
-            // ตรวจสอบว่าเปลี่ยนวันหรือยัง ถ้าเปลี่ยนวันให้เริ่มนับ 1 ใหม่
             if (localLastDate !== todayStr) {
                 localOrderCount = 0;
                 localLastDate = todayStr;
@@ -613,93 +673,24 @@
             isOrderIdGenerated = true;
             document.getElementById('displayOrderId').innerText = currentOrderId; 
             generateLayouts(singleVisaCanvasForExport, currentOrderId);
-            logFinalAction(actionName); // ฟังก์ชันนี้จะเซฟลงเครื่องถ้าเน็ตหลุด
+            logFinalAction(actionName); 
             hideLoader(); callback();
         }
 
         async function logFinalAction(actionName) { 
-    const payload = getLogData(actionName);
-    if(navigator.onLine) { 
-        try {
-            await callGAS("processAction", { payload: payload });
-            console.log('Saved to cloud');
-        } catch(err) {
-            pushToOfflineQueue(payload);
+            const payload = getLogData(actionName);
+            if(navigator.onLine) { 
+                try {
+                    await callGAS("processAction", { payload: payload });
+                    console.log('Saved to cloud');
+                } catch(err) {
+                    pushToOfflineQueue(payload);
+                }
+            } else {
+                pushToOfflineQueue(payload);
+            }
         }
-    } else {
-        pushToOfflineQueue(payload);
-    }
-}
 
-// 1. ฟังก์ชันกลางสำหรับเรียก API (เพิ่มระบบจับ Error และ Redirect)
-async function callGAS(methodName, extraData = {}) {
-    const response = await fetch(GAS_URL, {
-        redirect: 'follow', // ป้องกันบั๊กเวลา Google ส่ง Redirect
-        method: 'POST',
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ method: methodName, ...extraData })
-    });
-    const result = await response.json();
-    if (result.status === 'success') {
-        // เช็คให้ชัวร์ว่าฝั่ง Google Sheet ไม่ได้พัง
-        if (result.data && result.data.success === false) {
-            throw new Error(result.data.error);
-        }
-        return result.data;
-    }
-    throw new Error(result.message);
-}
-
-// 2. ตัวแปรล็อกประตู กันส่งข้อมูลซ้อนกัน
-let isSyncing = false; 
-
-// 3. ระบบดันข้อมูลออฟไลน์ (เปลี่ยนเป็นเข้าคิวส่งทีละ 1 รายการ)
-async function syncOfflineQueue() {
-    // ถ้ากำลังซิงค์อยู่ หรือไม่มีคิว หรือไม่มีเน็ต ให้หยุดทำ
-    if (isSyncing || offlineQueue.length === 0 || !navigator.onLine) return;
-    
-    isSyncing = true; // ล็อกประตู
-    const statusBadge = document.getElementById('networkStatus');
-    
-    try {
-        // วนลูปส่งทีละคิวตามลำดับ จนกว่าจะหมดหรือเน็ตหลุด
-        while (offlineQueue.length > 0 && navigator.onLine) {
-            statusBadge.innerHTML = `🟢 กำลังซิงค์... (เหลือ ${offlineQueue.length})`;
-            statusBadge.className = 'ml-3 px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-100 text-blue-700 border border-blue-200 shadow-sm';
-            
-            const dataToSync = offlineQueue[0];
-            
-            // รอจนกว่าจะส่งเข้า Sheet สำเร็จเท่านั้น
-            await callGAS("processAction", { payload: dataToSync });
-            
-            // พอมั่นใจว่าลง Sheet แน่นอนแล้ว ค่อยลบออกจากความจำเครื่อง
-            offlineQueue.shift(); 
-            localStorage.setItem('snapStudioQueue', JSON.stringify(offlineQueue));
-        }
-    } catch(err) {
-        console.error('การซิงค์ขัดข้อง จะลองใหม่ภายหลัง:', err);
-    } finally {
-        isSyncing = false; // ปลดล็อกประตู
-        updateNetworkStatus(); // รีเซ็ตหน้าจอเป็นปกติ
-    }
-}
-
-// 4. ระบบเช็คเน็ต
-function updateNetworkStatus() {
-    const statusBadge = document.getElementById('networkStatus');
-    if (navigator.onLine) {
-        if (!isSyncing && offlineQueue.length === 0) {
-            statusBadge.innerHTML = '🟢 ออนไลน์';
-            statusBadge.className = 'ml-3 px-2 py-0.5 text-[10px] font-bold rounded-full bg-green-100 text-green-700 border border-green-200 shadow-sm';
-        }
-        if (offlineQueue.length > 0) syncOfflineQueue();
-    } else {
-        statusBadge.innerHTML = `🔴 ออฟไลน์ (ค้าง ${offlineQueue.length})`;
-        statusBadge.className = 'ml-3 px-2 py-0.5 text-[10px] font-bold rounded-full bg-red-100 text-red-700 border border-red-200 shadow-sm';
-    }
-}
-
-        // --- ปุ่มต่างๆ ---
         document.getElementById('shareBtn').addEventListener('click', function() {
             const btn = this; const origBtnText = btn.innerHTML;
             executeActionWithOrder("แชร์/เซฟ แผ่นรวม", async function() {
@@ -776,27 +767,6 @@ function updateNetworkStatus() {
             window.scrollTo({ top: 0, behavior: 'smooth' }); 
         });
 
-       // ⚠️ เอา URL จาก GAS ที่ Deploy มาใส่ตรงนี้
-const GAS_URL = "https://script.google.com/macros/s/AKfycbxTm1rBQFW7cgovS1uzgDLmIDEvqLgG6bdVV8vFMkNT4www9tglzjDihgbTNqv5KiqP/exec";
-
-// ฟังก์ชันกลางสำหรับเรียก API
-async function callGAS(methodName, extraData = {}) {
-    const response = await fetch(GAS_URL, {
-        method: 'POST',
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ method: methodName, ...extraData })
-    });
-    const result = await response.json();
-    if (result.status === 'success') return result.data;
-    throw new Error(result.message);
-}
-
-// ลงทะเบียน Service Worker ให้แอปโหลดออฟไลน์ได้
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js');
-} 
     </script>
 </body>
 </html>
-
-
