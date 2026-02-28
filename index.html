@@ -379,7 +379,7 @@
                 img.onload = function() {
                     canvas.width = img.width; canvas.height = img.height; ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                     eraserHistory = []; redoHistory = []; saveHistory(); 
-                    document.getElementById('eraser-workspace').classList.remove('hidden'); document.getElementById('uploadArea').classList.add('hidden'); setEraserState(false); fitCanvasToScreen(img.width, img.height);
+                    document.getElementById('eraser-workspace').classList.remove('hidden'); document.getElementById('uploadArea').classList.add('hidden'); fitCanvasToScreen(img.width, img.height);
                 }; img.src = event.target.result;
             }; reader.readAsDataURL(file);
         });
@@ -798,4 +798,5 @@ if ('serviceWorker' in navigator) {
     </script>
 </body>
 </html>
+
 
