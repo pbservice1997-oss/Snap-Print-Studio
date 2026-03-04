@@ -65,7 +65,7 @@
             <div class="flex items-center">
                 <h1 class="text-xl font-bold text-blue-600 tracking-tight flex items-baseline">
                     <svg class="w-6 h-6 mr-1.5 self-center" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                    Snap&Print <span class="text-[11px] text-gray-400 font-normal ml-2 tracking-normal">V.5</span>
+                    Snap&Print <span class="text-[11px] text-gray-400 font-normal ml-2 tracking-normal">V.6</span>
                 </h1>
                 <span id="networkStatus" class="ml-3 px-2 py-0.5 text-[10px] font-bold rounded-full bg-green-100 text-green-700 border border-green-200 shadow-sm">
                     🟢 ออนไลน์
@@ -274,7 +274,7 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     <script>
-        // 1. ตั้งค่าการเชื่อมต่อ GAS API (เอาไว้บนสุดเลย)
+        // 1. ตั้งค่าการเชื่อมต่อ GAS API
         const GAS_URL = "https://script.google.com/macros/s/AKfycbxTm1rBQFW7cgovS1uzgDLmIDEvqLgG6bdVV8vFMkNT4www9tglzjDihgbTNqv5KiqP/exec";
 
         // 2. ลงทะเบียน Service Worker ให้แอปโหลดออฟไลน์ได้
@@ -294,12 +294,11 @@
         let offlineQueue = JSON.parse(localStorage.getItem('snapStudioQueue') || '[]');
         let localOrderCount = parseInt(localStorage.getItem('snapStudioOrderCount') || '0');
         let localLastDate = localStorage.getItem('snapStudioLastDate') || '';
-        let isSyncing = false; // ตัวแปรล็อกประตู กันส่งข้อมูลซ้อนกัน
+        let isSyncing = false;
 
-        // 4.1 ฟังก์ชันกลางสำหรับเรียก API
         async function callGAS(methodName, extraData = {}) {
             const response = await fetch(GAS_URL, {
-                redirect: 'follow', // ป้องกันบั๊กเวลา Google ส่ง Redirect
+                redirect: 'follow',
                 method: 'POST',
                 headers: { "Content-Type": "text/plain;charset=utf-8" },
                 body: JSON.stringify({ method: methodName, ...extraData })
@@ -314,11 +313,10 @@
             throw new Error(result.message);
         }
 
-        // 4.2 ระบบดันข้อมูลออฟไลน์
         async function syncOfflineQueue() {
             if (isSyncing || offlineQueue.length === 0 || !navigator.onLine) return;
             
-            isSyncing = true; // ล็อกประตู
+            isSyncing = true;
             const statusBadge = document.getElementById('networkStatus');
             
             try {
@@ -333,14 +331,13 @@
                     localStorage.setItem('snapStudioQueue', JSON.stringify(offlineQueue));
                 }
             } catch(err) {
-                console.error('การซิงค์ขัดข้อง จะลองใหม่ภายหลัง:', err);
+                console.error('การซิงค์ขัดข้อง:', err);
             } finally {
-                isSyncing = false; // ปลดล็อกประตู
-                updateNetworkStatus(); // รีเซ็ตหน้าจอเป็นปกติ
+                isSyncing = false;
+                updateNetworkStatus();
             }
         }
 
-        // 4.3 ระบบเช็คเน็ตและอัปเดตหน้าจอ
         function updateNetworkStatus() {
             const statusBadge = document.getElementById('networkStatus');
             if (navigator.onLine) {
@@ -355,7 +352,6 @@
             }
         }
 
-        // 4.4 ฟังก์ชันบันทึกข้อมูลลงเครื่องตอนออฟไลน์
         function pushToOfflineQueue(payload) {
             offlineQueue.push(payload);
             localStorage.setItem('snapStudioQueue', JSON.stringify(offlineQueue));
@@ -364,10 +360,9 @@
 
         window.addEventListener('online', updateNetworkStatus);
         window.addEventListener('offline', updateNetworkStatus);
-        updateNetworkStatus(); // Run once on load
-        // ---------------------------
+        updateNetworkStatus(); 
 
-        // 5. ระบบตกแต่งรูป (Canvas, Cropper, UI)
+        // 5. ระบบตกแต่งรูป
         const container = document.getElementById('eraser-container'); const canvas = document.getElementById('eraser-canvas'); const ctx = canvas.getContext('2d', { willReadFrequently: true });
         let isEraserActive = false; let isDrawing = false; let eraserHistory = []; let redoHistory = []; 
         let transform = { x: 0, y: 0, scale: 1 }; let isDragging = false; let dragStart = { x: 0, y: 0 };
@@ -622,55 +617,35 @@
             return sheets;
         }
 
-        // ระบบสร้างเลขคิวแบบรวดเร็ว (ออฟไลน์ 100%)
         function executeActionWithOrder(actionName, callback) {
             if (isOrderIdGenerated) { logFinalAction(actionName); callback(); return; }
             showLoader("กำลังจัดเตรียมไฟล์...");
 
-            // 1. ดึงวันที่ปัจจุบันของเครื่องแท็บเล็ต
             const d = new Date();
             const year = d.getFullYear(); 
             const month = ("0" + (d.getMonth() + 1)).slice(-2); 
             const day = ("0" + d.getDate()).slice(-2);
             const todayStr = `${year}-${month}-${day}`;
 
-            // 2. 🚨 เช็คว่าขึ้นวันใหม่หรือยัง? ถ้ารหัสวันไม่ตรงกับล่าสุด ให้เริ่มนับ 1 ใหม่!
             if (localLastDate !== todayStr) {
                 localOrderCount = 0;
                 localLastDate = todayStr;
                 localStorage.setItem('snapStudioLastDate', todayStr);
             }
 
-            // 3. รันเลขคิวบวกเพิ่ม 1
             localOrderCount++;
             localStorage.setItem('snapStudioOrderCount', localOrderCount);
             
-            // 4. สร้างเลขออเดอร์ทันที (เช่น 2026-03-04-001) ไม่ต้องรอเน็ต
             currentOrderId = `${todayStr}-${("000" + localOrderCount).slice(-3)}`;
             isOrderIdGenerated = true;
             
-            // อัปเดตเลขขึ้นหน้าจอ
             document.getElementById('displayOrderId').innerText = currentOrderId; 
             generateLayouts(singleVisaCanvasForExport, currentOrderId);
             
-            // 5. สั่งให้บันทึกลง Sheet แบบ Background (ถ้าไม่มีเน็ตมันจะเก็บลงคิวในเครื่องเอง)
             logFinalAction(actionName); 
             
             hideLoader(); 
-            // 6. เรียกใช้งานหน้าต่างแชร์ของ Apple ทันที (คราวนี้จะไม่โดนบล็อกแล้ว!)
             callback(); 
-        }
-
-            localOrderCount++;
-            localStorage.setItem('snapStudioOrderCount', localOrderCount);
-            
-            currentOrderId = `${todayStr}-${("000" + localOrderCount).slice(-3)} (ออฟไลน์)`;
-            
-            isOrderIdGenerated = true;
-            document.getElementById('displayOrderId').innerText = currentOrderId; 
-            generateLayouts(singleVisaCanvasForExport, currentOrderId);
-            logFinalAction(actionName); 
-            hideLoader(); callback();
         }
 
         async function logFinalAction(actionName) { 
@@ -678,7 +653,6 @@
             if(navigator.onLine) { 
                 try {
                     await callGAS("processAction", { payload: payload });
-                    console.log('Saved to cloud');
                 } catch(err) {
                     pushToOfflineQueue(payload);
                 }
@@ -766,5 +740,3 @@
     </script>
 </body>
 </html>
-
-
