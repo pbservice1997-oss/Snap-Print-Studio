@@ -622,49 +622,44 @@
             return sheets;
         }
 
-        async function executeActionWithOrder(actionName, callback) {
+        // ระบบสร้างเลขคิวแบบรวดเร็ว (ออฟไลน์ 100%)
+        function executeActionWithOrder(actionName, callback) {
             if (isOrderIdGenerated) { logFinalAction(actionName); callback(); return; }
-            showLoader("กำลังสร้าง Order ID และจัดเตรียมข้อมูล...");
+            showLoader("กำลังจัดเตรียมไฟล์...");
 
-            if(navigator.onLine) {
-                try {
-                    const orderId = await callGAS("generateOrderId", { clientCount: localOrderCount });
-                    const parts = orderId.split('-');
-                    if (parts.length >= 4) {
-                        const dateStr = parts.slice(0, 3).join('-');
-                        const numPart = parseInt(parts[3], 10);
-                        if (!isNaN(numPart)) {
-                            localStorage.setItem('snapStudioOrderCount', numPart);
-                            localStorage.setItem('snapStudioLastDate', dateStr);
-                            localOrderCount = numPart;
-                            localLastDate = dateStr;
-                        }
-                    }
-                    currentOrderId = orderId; isOrderIdGenerated = true;
-                    document.getElementById('displayOrderId').innerText = orderId; 
-                    generateLayouts(singleVisaCanvasForExport, orderId);
-                    logFinalAction(actionName);
-                    hideLoader(); callback(); 
-                } catch(err) {
-                    fallbackLocalOrder(actionName, callback);
-                }
-            } else {
-                fallbackLocalOrder(actionName, callback);
-            }
-        }
-
-        function fallbackLocalOrder(actionName, callback) {
+            // 1. ดึงวันที่ปัจจุบันของเครื่องแท็บเล็ต
             const d = new Date();
             const year = d.getFullYear(); 
             const month = ("0" + (d.getMonth() + 1)).slice(-2); 
             const day = ("0" + d.getDate()).slice(-2);
             const todayStr = `${year}-${month}-${day}`;
 
+            // 2. 🚨 เช็คว่าขึ้นวันใหม่หรือยัง? ถ้ารหัสวันไม่ตรงกับล่าสุด ให้เริ่มนับ 1 ใหม่!
             if (localLastDate !== todayStr) {
                 localOrderCount = 0;
                 localLastDate = todayStr;
                 localStorage.setItem('snapStudioLastDate', todayStr);
             }
+
+            // 3. รันเลขคิวบวกเพิ่ม 1
+            localOrderCount++;
+            localStorage.setItem('snapStudioOrderCount', localOrderCount);
+            
+            // 4. สร้างเลขออเดอร์ทันที (เช่น 2026-03-04-001) ไม่ต้องรอเน็ต
+            currentOrderId = `${todayStr}-${("000" + localOrderCount).slice(-3)}`;
+            isOrderIdGenerated = true;
+            
+            // อัปเดตเลขขึ้นหน้าจอ
+            document.getElementById('displayOrderId').innerText = currentOrderId; 
+            generateLayouts(singleVisaCanvasForExport, currentOrderId);
+            
+            // 5. สั่งให้บันทึกลง Sheet แบบ Background (ถ้าไม่มีเน็ตมันจะเก็บลงคิวในเครื่องเอง)
+            logFinalAction(actionName); 
+            
+            hideLoader(); 
+            // 6. เรียกใช้งานหน้าต่างแชร์ของ Apple ทันที (คราวนี้จะไม่โดนบล็อกแล้ว!)
+            callback(); 
+        }
 
             localOrderCount++;
             localStorage.setItem('snapStudioOrderCount', localOrderCount);
@@ -771,4 +766,5 @@
     </script>
 </body>
 </html>
+
 
